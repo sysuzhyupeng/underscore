@@ -165,4 +165,141 @@
 	    // 返回新的结果数组
 	    return results;
   	}
+  	// 根据 dir 确定是向左还是向右遍历
+  	function createReduce(dir){
+  		//不断递归向后调用
+	    function iterator(obj, iteratee, memo, keys, index, length) {
+	        for (; index >= 0 && index < length; index += dir) {
+	        	var currentKey = keys ? keys[index] : index;
+	        	// 迭代，返回值供下次迭代调用
+	        	memo = iteratee(memo, obj[currentKey], currentKey, obj);
+	      	}
+	      	// 每次迭代返回值，供下次迭代调用
+	      	return memo;
+	    }
+	    // _.reduce（_.reduceRight）可传入的 4 个参数
+	    // obj 数组或者对象
+	    // iteratee 迭代方法，对数组或者对象每个元素执行该方法
+	    // memo 初始值，如果有，则从 obj 第一个元素开始迭代
+	    // 如果没有，则从 obj 第二个元素开始迭代，将第一个元素作为初始值
+    	// context 为迭代函数中的 this 指向
+    	return function(obj, iteratee, memo, context) {
+      		iteratee = optimizeCb(iteratee, context, 4);
+      		var keys = !isArrayLike(obj) && _.keys(obj),
+          		length = (keys || obj).length,
+          		index = dir > 0 ? 0 : length - 1;
+
+     		 // Determine the initial value if none is provided.
+      		// 如果没有指定初始值
+      		// 则把第一个元素指定为初始值
+      		if (arguments.length < 3) {
+        		memo = obj[keys ? keys[index] : index];
+        		// 根据 dir 确定是向左还是向右遍历
+        		index += dir;
+      		}
+      		return iterator(obj, iteratee, memo, keys, index, length);
+    	};
+  	}
+  	_.reduce = _.foldl = _.inject = createReduce(1);
+  	// 与 ES5 中 Array.prototype.reduceRight 使用方法类似
+ 	_.reduceRight = _.foldr = createReduce(-1);
+ 	_.find = _.detect = function(obj, predicate, context) {
+ 		var key;
+ 		// 如果 obj 是数组，key 为满足条件的下标
+ 		if(isArrayLike(obj)){
+ 			key = _.findIndex(obj, predicate, context);
+ 		} else {
+ 			key = _.findKey(obj, predicate, context);
+ 		}
+ 		// 如果不存在，则默认返回 undefined（函数没有返回，即返回 undefined）
+    	if (key !== void 0 && key !== -1) return obj[key];
+ 	}
+ 	_.filter = _.select = function(obj, predicate, context) {
+    	var results = [];
+    	// 修改this 指向，也就是在predicate方法的执行阶段的this，返回 predicate 函数（判断函数）
+    	predicate = cb(predicate, context);
+    	// 遍历每个元素，如果符合条件则存入数组
+    	_.each(obj, function(value, index, list) {
+      		if (predicate(value, index, list)) results.push(value);
+    	});
+    	return results;
+    }
+    // 寻找数组或者对象中所有不满足条件的元素
+    _.reject = function(obj, predicate, context) {
+    	return _.filter(obj, _.negate(cb(predicate)), context);
+  	};
+  	//都是把predicate函数改变this之后传进来循环执行
+  	_.every = _.all = function(obj, predicate, context) {
+	    // 根据 this 指向，返回相应 predicate 函数
+	    predicate = cb(predicate, context);
+
+	    var keys = !isArrayLike(obj) && _.keys(obj),
+	        length = (keys || obj).length;
+
+	    for (var index = 0; index < length; index++) {
+	      var currentKey = keys ? keys[index] : index;
+	      // 如果有一个不能满足 predicate 中的条件
+	      // 则返回 false
+	      if (!predicate(obj[currentKey], currentKey, obj))
+	        return false;
+	    }
+    	return true;
+  	};
+  	_.some = _.any = function(obj, predicate, context) {
+	    // 根据 context 返回 predicate 函数
+	    predicate = cb(predicate, context);
+	    // 如果传参是对象，则返回该对象的 keys 数组
+	    var keys = !isArrayLike(obj) && _.keys(obj),
+	        length = (keys || obj).length;
+	    for (var index = 0; index < length; index++) {
+	      var currentKey = keys ? keys[index] : index;
+	      // 如果有一个元素满足条件，则返回 true
+	      if (predicate(obj[currentKey], currentKey, obj)) return true;
+	    }
+	    return false;
+  	};
+  	// 判断数组或者对象中（value 值）是否有指定元素
+  	_.contains = _.includes = _.include = function(obj, item, fromIndex, guard) {
+  		// 如果是对象，返回 values 组成的数组
+    	if (!isArrayLike(obj)) obj = _.values(obj);
+    	// fromIndex 表示查询起始位置
+    	// 如果没有指定该参数，则默认从头找起
+    	if (typeof fromIndex != 'number' || guard) fromIndex = 0;
+    	// _.indexOf 是数组的扩展方法（Array Functions）
+    	// 数组中寻找某一元素
+    	return _.indexOf(obj, item, fromIndex) >= 0;
+  	}
+
+  	// 数组或者对象中的每个元素都调用 method 方法
+	// 返回调用后的结果（数组或者关联数组）
+	// method 参数后的参数会被当做参数传入 method 方法中
+	// _.invoke(list, methodName, *arguments)
+	_.invoke = function(obj, method) {
+	    // *arguments 参数
+	    var args = slice.call(arguments, 2);
+
+	    // 判断 method 是不是函数
+	    var isFunc = _.isFunction(method);
+
+	    // 用 map 方法对数组或者对象每个元素调用方法
+	    // 返回数组
+	    return _.map(obj, function(value) {
+	      // 如果 method 不是函数，则可能是 obj 的 key 值
+	      // 而 obj[method] 可能为函数
+	      var func = isFunc ? method : value[method];
+	      return func == null ? func : func.apply(value, args);
+	    });
+	};
+
+
+
+    // _.isFunction 在 old v8, IE 11 和 Safari 8 下的兼容
+	// 觉得这里有点问题
+	// 我用的 chrome 49 (显然不是 old v8)
+	// 却也进入了这个 if 判断内部
+	if (typeof /./ != 'function' && typeof Int8Array != 'object') {
+	    _.isFunction = function(obj) {
+	        return typeof obj == 'function' || false;
+	    };
+	}
 }.call(window))
