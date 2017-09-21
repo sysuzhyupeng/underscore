@@ -275,21 +275,28 @@
 	// method 参数后的参数会被当做参数传入 method 方法中
 	// _.invoke(list, methodName, *arguments)
 	_.invoke = function(obj, method) {
-	    // *arguments 参数
+	    // 将method之后的参数保存在数组中
 	    var args = slice.call(arguments, 2);
-
 	    // 判断 method 是不是函数
 	    var isFunc = _.isFunction(method);
-
 	    // 用 map 方法对数组或者对象每个元素调用方法
 	    // 返回数组
 	    return _.map(obj, function(value) {
-	      // 如果 method 不是函数，则可能是 obj 的 key 值
-	      // 而 obj[method] 可能为函数
-	      var func = isFunc ? method : value[method];
-	      return func == null ? func : func.apply(value, args);
+	        // 如果 method 不是函数，则可能是 obj 的 key 值
+	        // 而 obj[method] 可能为函数
+	        var func = isFunc ? method : value[method];
+	        return func == null ? func : func.apply(value, args);
 	    });
 	};
+	// _.pluck(list, propertyName)
+	_.pluck = function(obj, key) {
+    	return _.map(obj, _.property(key));
+  	};
+  	//
+  	_.where = function(obj, attrs) {
+    	return _.filter(obj, _.matcher(attrs));
+  	};
+
 
 
 
