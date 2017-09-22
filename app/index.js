@@ -292,9 +292,13 @@
 	_.pluck = function(obj, key) {
     	return _.map(obj, _.property(key));
   	};
-  	//
+  	//根据指定的键值对 选择对象
   	_.where = function(obj, attrs) {
     	return _.filter(obj, _.matcher(attrs));
+  	};
+  	//寻找第一个有指定 key-value 键值对的对象
+  	_.findWhere = function(obj, attrs) {
+    	return _.find(obj, _.matcher(attrs));
   	};
 
 
