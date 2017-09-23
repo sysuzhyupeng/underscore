@@ -537,6 +537,52 @@
         // 之后便可以调用 _.difference 方法
         return _.difference(array, slice.call(arguments, 1));
     }
+    /*
+    	有两个api
+    */
+    _.uniq = _.unique = function(array, isSorted, iteratee, context){
+    	/*
+    		第二个餐参数缺失的时候，
+			后面参数前移一位，
+			再将第二个参数的默认值附上
+    	*/
+    	if(!_.isBoolean(isSorted)){
+    		context = iteratee;
+    		iteratee = isSorted;
+    		isSorted = false;
+    	}
+    	if(iteratee != null) iteratee = cb(iteratee, context);
+    	var result = [];
+    	//已经出现过的元素
+    	var seen = [];
+    	for(var i = 0, length = getLength(array); i < length; i++){
+    		var value = array[i],
+    		//如果指定了迭代参数，先进行迭代
+    		computed = iteratee ? iteratee(value, i, array) : value;
+    		//如果是有序数组，则当前元素只需要跟上一个对比
+    		if(isSorted){
+	    		// 如果 i === 0，是第一个元素，则直接 push
+	        	// 否则比较当前元素是否和前一个元素相等
+	        	if (!i || seen !== computed) result.push(value);
+	        	// seen 保存当前元素，供下一次对比
+	        	//这里把seen改成了一个元素，不再是数组
+	        	seen = computed;
+    		} else if(iteratee){
+    			// 如果 seen[] 中没有 computed 这个元素值
+		        if (!_.contains(seen, computed)) {
+		            seen.push(computed);
+		            result.push(value);
+		        }
+    		} else if(!_.contains(result, value)){
+    			// 如果不用经过迭代函数计算，也就不用 seen[] 变量了
+        		result.push(value);
+    		}
+    	}
+    	return result;
+    }
+	
+
+
     // 删除 array 数组中在 others 数组中出现的元素
     _.difference = function(array){
     	// 将 others 数组展开一层
@@ -547,10 +593,10 @@
     		return !_.contains(rest, value);
     	})
     }
-
-
-
-
+    _.isBoolean = function(obj) {
+    	//使用短路运算来提升性能
+    	return obj === true || obj === false || toString.call(obj) === '[object Boolean]';
+  	};
     _.has = function(obj, key) {
             // obj为null或者undefined返回false，否则判断是否在对象上
             return obj != null && hasOwnProperty.call(obj, key);
