@@ -292,7 +292,7 @@
 	_.pluck = function(obj, key) {
     	return _.map(obj, _.property(key));
   	};
-  	//根据指定的键值对 选择对象
+  	//根据指定的键值对选择对象
   	_.where = function(obj, attrs) {
     	return _.filter(obj, _.matcher(attrs));
   	};
@@ -300,7 +300,116 @@
   	_.findWhere = function(obj, attrs) {
     	return _.find(obj, _.matcher(attrs));
   	};
+    _.max = function(obj, iteratee, context){
+        //result设为最小值
+        var result = -Infinity,
+            lastComputed = -Infinity,
+            value,
+            computed;
+        // 单纯地寻找最值
+        if(iteratee == null && obj != null){
+            // 如果是数组，则寻找数组中最大元素,如果是对象，则寻找最大 value 值
+            // 如果是对象，返回 values 组成的数组
+            obj = isArrayLike(obj) ? obj : _.values(obj);
+            for(var i = 0, length = obj.length; i < length; i++){
+                value = obj[i];
+                if(value > result){
+                    result = value;
+                }
+            }
+        } else {
+            //寻找元素经过迭代后的最值
+            //改变this指向
+            iteratee = cb(iteratee, context);
+            //lastComputed保存计算过程中的最值
+            //遍历元素
+            _.each(obj, function(value, index, list){
+                computed = iteratee(value, index, list);
+                // && 的优先级高于 ||
+                if (computed > lastComputed || computed === -Infinity && result === -Infinity) {
+                    result = value;
+                    lastComputed = computed;
+                }
+            })
+        }
+        return result;
+    }
+    // 寻找最小的元素
+    // 类似 _.max,_.min(list, [iteratee], [context])， 这里不重复实现
 
+    // 将数组乱序
+    // 如果是对象，则返回一个数组，数组由对象 value 值构成
+    // O(n)复杂度
+
+    /*
+        首先我们考虑 n = 2 的情况，根据算法，显然有 1/2 的概率两个数交换，有 1/2 的概率两个数不交换，因此对 n = 2 的情况，元素出现在每个位置的概率都是 1/2，满足随机性要求。
+        假设有 i 个数， i >= 2 时，算法随机性符合要求，即每个数出现在 i 个位置上每个位置的概率都是 1/i。
+        对于 i + 1 个数，按照我们的算法，在第一次循环时，每个数都有 1/(i+1) 的概率被交换到最末尾，所以每个元素出现在最末一位的概率都是 1/(i+1) 。而每个数也都有 i/(i+1) 的概率不被交换到最末尾，
+        如果不被交换，从第二次循环开始还原成 i 个数随机，根据 2. 的假设，它们出现在 i 个位置的概率是 1/i。因此每个数出现在前 i 位任意一位的概率是 (i/(i+1)) * (1/i) = 1/(i+1)，也是 1/(i+1)。
+        综合 1. 2. 3. 得出，对于任意 n >= 2，经过这个算法，每个元素出现在 n 个位置任意一个位置的概率都是 1/n。
+    */
+    _.shuffle = function(obj){
+        //如果是对象，则对value值进行乱序
+        var set = isArrayLike(obj) ? obj : _value(obj);
+        var length = set.length;
+        var shuffled = Array(length);
+        for(var index = 0, rand; index < length; index++){
+            //将新数组index位置设为新数组的rand元素
+            //将新数组rand位置设为旧数组的index元素
+            rand = _.random(0, index);
+            //即使rand重复，在下一次中shuffled[index]也会得到值
+            if(rand !== index) shuffled[index] = shuffled[rand];
+            //set作为原来的
+            shuffled[rand] = set[index];
+        }
+        return shuffled;
+    }
+
+    _.sample = function(obj, n, guard){
+        if(n == null || guard){
+            if (!isArrayLike(obj)) obj = _.values(obj);
+            return bj[_.random(obj.length - 1)];
+        }
+        //随机返回n个，在乱序之后直接slice
+        return _.shuffle(obj).slice(0, Math.max(0, n));
+    }
+
+    _.random = function(min, max){
+        //如果只传入一个参数，则返回[0, max]
+        if(max == null){
+            max = min;
+            min = 0;
+        }
+        return min + Math.floor(Math.random() * (max - min + 1));
+    }
+    //把对象的value收集成数组后返回
+    _.values = function(obj){
+        // 仅包括 own properties
+        var keys = _.keys(obj);
+        var length = keys.length;
+        var values = Array(length);
+        for(var i = 0; i < length; i++){
+            values[i] = obj[keys[i]];
+        }
+        return values;
+    }
+
+    _.keys = function(obj){
+        //如果传入参数不是对象，则返回空数组
+        if(!_.isObject(obj)) return [];
+        //如果支持Object.keys
+        if(nativeKeys) return nativeKeys(obj);
+        var keys = [];
+        for(var key in obj){
+            if(_.has(obj, key)) keys.push(key);
+        }
+        // IE < 9 下不能用 for in 来枚举某些 key 值
+        // 传入 keys 数组为参数
+        // 因为 JavaScript 下函数参数按值传递
+        // 所以 keys 当做参数传入后会在 `collectNonEnumProps` 方法中改变值
+        if (hasEnumBug) collectNonEnumProps(obj, keys);
+        return keys;
+    }
 
 
 
