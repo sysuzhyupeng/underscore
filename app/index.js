@@ -116,12 +116,13 @@
   	}
   	// 闭包
   	var property = function(key) {
-  		//调用的时候 property('a')({a: 1})
+  		//调用的时候 _.property('a')(obj)，获取对象的value值(加上了obj是否存在的判断)
     	return function(obj) {
       		return obj == null ? void 0 : obj[key];
     	};
   	};
-  	// Math.pow(2, 53) - 1 是 JavaScript 中能精确表示的最大数字
+    _.property = property;
+  	// Math.pow(2, 53) - 1 是javaScript 中能精确表示的最大数字
   	var MAX_ARRAY_INDEX = Math.pow(2, 53) - 1;
   	// 用来获取 array 以及 arrayLike 元素的 length 属性值
   	var getLength = property('length');
@@ -289,6 +290,7 @@
 	    });
 	};
 	// _.pluck(list, propertyName)
+    //_.property返回一个函数，返回对象的指定value
 	_.pluck = function(obj, key) {
     	return _.map(obj, _.property(key));
   	};
@@ -364,7 +366,7 @@
         }
         return shuffled;
     }
-
+    //从数组或者对象中取样
     _.sample = function(obj, n, guard){
         if(n == null || guard){
             if (!isArrayLike(obj)) obj = _.values(obj);
@@ -372,6 +374,12 @@
         }
         //随机返回n个，在乱序之后直接slice
         return _.shuffle(obj).slice(0, Math.max(0, n));
+    }
+    _.sortBy = function(obj, iteratee, context){
+        iteratee = cb(iteratee, context);
+        // _.pluck([{}, {}, {}], 'value')
+        return _.pluck(
+        )
     }
 
     _.random = function(min, max){
