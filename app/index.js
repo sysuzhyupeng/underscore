@@ -532,11 +532,22 @@
     // => [2, 3, 4]
     // 从数组中移除指定的元素
     // 返回移除后的数组副本
-    _without = function(array){
+    _.without = function(array){
         // 将 arguments 转为数组（同时去掉第一个元素）
         // 之后便可以调用 _.difference 方法
         return _.difference(array, slice.call(arguments, 1));
     }
+    // 删除 array 数组中在 others 数组中出现的元素
+    _.difference = function(array){
+    	// 将 others 数组展开一层
+    	// rest[] 保存展开后的元素组成的数组
+    	var rest = flatten(arguments, true, true, 1);
+    	return _.filter(array, function(value){
+    		// 如果 value 存在在 rest 中，则过滤掉
+    		return !_.contains(rest, value);
+    	})
+    }
+
 
 
 
