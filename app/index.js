@@ -379,9 +379,171 @@
         iteratee = cb(iteratee, context);
         // _.pluck([{}, {}, {}], 'value')
         return _.pluck(
-        )
+            // _.map(obj, function(){}).sort()
+             // _.map 后的结果 [{}, {}..]
+             // sort 后的结果 [{}, {}..]
+         _.map(obj, function(value, index, list) {
+        return {
+          value: value,
+          index: index,
+          // 元素经过迭代函数迭代后的值
+          criteria: iteratee(value, index, list)
+        };
+        }).sort(function(left, right) {
+        var a = left.criteria;
+        var b = right.criteria;
+        if (a !== b) {
+            if (a > b || a === void 0) return 1;
+            if (a < b || b === void 0) return -1;
+        }
+        return left.index - right.index;
+        }), 'value');
+    }
+    // _.groupBy, _.indexBy 以及 _.countBy 其实都是对数组元素进行分类
+    // 分类规则就是 behavior 函数
+    /*
+        group返回一个函数，
+        第一个参数为obj，第二个参数为迭代器
+    */
+    var group = function(behavior){
+        return function(obj, iteratee, context){
+            //返回结果是一个对象，iteratee为筛选函数
+            var result = {};
+            iteratee = cb(iteratee, context);
+            _.each(obj, function(value, index){
+                var key = iteratee(value, index, obj);
+                behavior(result, value, key);
+            })
+            return result;
+        }
+    }
+    // 根据特定规则对数组或者对象中的元素进行分组
+    //将这个规则函数传入上一个group函数
+    /*
+        _.groupBy([1.3, 2.1, 2.4], function(num){ return Math.floor(num); });
+        {1: [1.3], 2: [2.1, 2.4]}
+
+        _.groupBy(['one', 'two', 'three'], 'length');
+        => {3: ["one", "two"], 5: ["three"]}
+    */
+    _.groupBy = group(function(result, value, key) {
+        //如果result对象已经有key值了
+        if(_.has(result, key))
+            result[key].push(value);
+        else result[key] = [value];
+    });
+    /*
+        当你知道你的键是唯一的时候可以使用indexBy 
+        var stooges = [{name: 'moe', age: 40}, {name: 'larry', age: 50}, {name: 'curly', age: 60}];
+        _.indexBy(stooges, 'age');
+            => {
+            "40": {name: 'moe', age: 40},
+            "50": {name: 'larry', age: 50},
+            "60": {name: 'curly', age: 60}
+        }
+    */
+    _indexBy = group(function(result, value, key){
+        result[key] = value;
+    });
+    /*
+         _.countBy([1, 2, 3, 4, 5], function(num) {
+                return num % 2 == 0 ? 'even': 'odd';
+        });
+        => {odd: 3, even: 2}
+        进行计数，而不是保存obj的value
+    */
+    _.countBy = group(function(result, value, key) {
+        // 不同 key 值元素数量
+        if (_.has(result, key))
+            result[key]++;
+        else result[key] = 1;
+    });
+    // 伪数组 -> 数组
+    // 对象 -> 提取 value 值组成数组
+    // 返回数组
+    _.toArray = function(obj){
+        if(!obj) return [];
+        // 如果是数组，则返回副本数组
+        if (_.isArray(obj)) return slice.call(obj);
+        // 如果是类数组，则重新构造新的数组
+        if (isArrayLike(obj)) return _.map(obj, _.identity);
+        // 如果是对象，则返回 values 集合
+        return _.values(obj);
+    }
+    _.size = function(){
+        if(obj == null) return 0;
+        //数组返回长度，对象返回key数组的长度
+        return isArrayLike(obj)? obj.length : _.keys(obj).length;
+    }
+    //将数组或者对象中符合条件（predicate）的元素
+    // 和不符合条件的元素（数组为元素，对象为 value 值）
+    // 分别放入两个数组中
+    // 返回一个数组，数组元素为以上两个数组（[[pass array], [fail array]]）
+    _.partition = function(obj, predicate, context){
+        predicate = cb(predicate, context);
+        var pass = [],
+            fail = [];
+        _.each(obj, function(value, key, obj){
+            (predicate(value, key, obj) ? pass : fail).push(value);
+        })
+        return [pass, fail]
+    }
+    _.first = _.head = _.take = function(array, n, guard){
+        // 数组为空则返回 undefined（undefined == null返回true，所以这里不用===）
+        if(array == null) return void 0;
+        // 没指定参数 n，则默认返回第一个元素
+        if (n == null || guard) return array[0];
+        // 如果传入参数 n，则返回前 n 个元素组成的数组
+        return _.initial(array, array.length - n);
+    }
+    // 返回剔除最后一个元素之后的数组副本
+    // 如果传入参数 n，则剔除最后 n 个元素
+    _.initial = function(array, n, guard){
+        return slice.call(array, 0, Math.max(0, array.length - (n == null || guard ? 1 : n)))
     }
 
+    _.last = function(array, n, guard){
+        if(array == null) return void 0;
+        if(n == null || guard) return array[array.length - 1];
+        // 即剔除前 array.length - n 个元素
+        return _rest(array, Math.max(0, array.length - n));
+    }
+    _.rest = _.tail = _.drop = function(array, n, guard){
+        // 返回剔除第一个元素后的数组副本
+        // 如果传入参数 n，则剔除前 n 个元素
+        return slice.call(array, n == null || guard ? 1: n);
+    }
+    // 去掉数组中所有的假值
+    // 返回数组副本（基本返回的都是副本）
+    // JavaScript 中的假值包括 false、null、undefined、''、NaN、0
+    _.compact = function(array){
+        return _.filter(array, _.identity);
+    }
+    //先留着不实现
+    var flatten = function(input, shallow, strict, startIndex) {
+    }
+    _.flatten = function(array, shallow) {
+        // array => 需要展开的数组
+        // shallow => 是否只展开一层的布尔值
+        // false 为 flatten 方法 strict 变量
+        return flatten(array, shallow, false);
+    };
+    // _.without([1, 2, 1, 0, 3, 1, 4], 0, 1);
+    // => [2, 3, 4]
+    // 从数组中移除指定的元素
+    // 返回移除后的数组副本
+    _without = function(array){
+        // 将 arguments 转为数组（同时去掉第一个元素）
+        // 之后便可以调用 _.difference 方法
+        return _.difference(array, slice.call(arguments, 1));
+    }
+
+
+
+    _.has = function(obj, key) {
+            // obj为null或者undefined返回false，否则判断是否在对象上
+            return obj != null && hasOwnProperty.call(obj, key);
+    };
     _.random = function(min, max){
         //如果只传入一个参数，则返回[0, max]
         if(max == null){
