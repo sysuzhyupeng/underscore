@@ -519,9 +519,39 @@
     _.compact = function(array){
         return _.filter(array, _.identity);
     }
-    //先留着不实现
+    //根据 startIndex 变量确定需要展开的起始位置
     var flatten = function(input, shallow, strict, startIndex) {
+    	//idx
+    	var ouput = [], idx = 0;
+        for(var i = startIndex || 0, length = getLength(input); i < length; i++){
+        	var value = input[i];
+        	// 注意 isArrayLike 还包括 {length: 10} 这样的，过滤掉
+        	if(isArrayLike(value) && (_.isArray(value) || _.isArguments(value))){
+        		//如果不只一层，递归
+        		if(!shallow) value = flatten(value, shallow, strict);
+        		// 递归展开到最后一层（没有嵌套的数组了）
+        		var j = 0, len = value.length;
+        		// 这一步貌似没有必要
+        		// 毕竟 JavaScript 的数组会自动扩充
+        		ouput.length += len;
+        		while(j < len){
+        			ouput[idx++] = value[j++];
+        		}
+        	} else if(!strict){
+        		// (!strict === true) => (strict === false)
+		        // 如果是深度展开，即 shallow 参数为 false
+		        // 那么当最后 value 不是数组，是基本类型时
+		        // 肯定会走到这个 else-if 判断中
+		        // 而如果此时 strict 为 true，则不能跳到这个分支内部
+		        // 所以 shallow === false 如果和 strict === true 搭配
+		        // 调用 flatten 方法得到的结果永远是空数组 []
+        		ouput[idx++] = value;
+        	}
+        }
     }
+    /*
+    	_.flatten([1, [2], [3, [[4]]]], true);
+    */
     _.flatten = function(array, shallow) {
         // array => 需要展开的数组
         // shallow => 是否只展开一层的布尔值
@@ -538,13 +568,14 @@
         return _.difference(array, slice.call(arguments, 1));
     }
     /*
-    	有两个api
+    	_.uniq([1, 2, 1, 3, 1, 4]);
+		=> [1, 2, 3, 4]
     */
     _.uniq = _.unique = function(array, isSorted, iteratee, context){
     	/*
     		第二个餐参数缺失的时候，
 			后面参数前移一位，
-			再将第二个参数的默认值附上
+			再将第二个参数的默认值赋上
     	*/
     	if(!_.isBoolean(isSorted)){
     		context = iteratee;
@@ -571,6 +602,7 @@
     			// 如果 seen[] 中没有 computed 这个元素值
 		        if (!_.contains(seen, computed)) {
 		            seen.push(computed);
+		            //只push原来的元素，返回的不是迭代后的元素
 		            result.push(value);
 		        }
     		} else if(!_.contains(result, value)){
@@ -579,6 +611,11 @@
     		}
     	}
     	return result;
+    }
+    // 将多个数组的元素集中到一个数组中
+  	// 并且去重，返回数组副本
+    _.union = function(){
+    	return _.uniq(flatten(arguments, true, true))
     }
 	
 
