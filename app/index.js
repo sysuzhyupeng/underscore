@@ -548,6 +548,7 @@
         		ouput[idx++] = value;
         	}
         }
+        return ouput;
     }
     /*
     	_.flatten([1, [2], [3, [[4]]]], true);
@@ -617,7 +618,28 @@
     _.union = function(){
     	return _.uniq(flatten(arguments, true, true))
     }
-	
+    // 寻找几个数组中共有的元素
+  	// 将这些每个数组中都有的元素存入另一个数组中返回
+  	//_.intersection([1, 2, 3, 1], [101, 2, 1, 10, 1], [2, 1, 1])
+  	// => [1, 2]
+	_.intersection = function(array){
+		var result = [];
+		var argsLength = arguments.length;
+		//遍历第一个数组的元素
+		//因为我们求的是交集，所以只需要遍历第一个参数数组即可
+		for(var i = 0, length = getLength(array); i < length; i++){
+			var item = array[i];
+			//其实应该是对象去重效率比较高
+			if(_.contains(result, item)) continue;
+			for(var j = 1; j < argsLength; j++){
+				if(!_.contains(arguments[j], item))
+					break;
+			}
+			//如果遍历结束也没有发现其他数组中有这个元素
+			if(j === argsLength) result.push(item);
+		}
+		return result;
+	}
 
 
     // 删除 array 数组中在 others 数组中出现的元素
@@ -674,7 +696,33 @@
         if (hasEnumBug) collectNonEnumProps(obj, keys);
         return keys;
     }
-
+    // 判断是否为数组
+  	_.isArray = nativeIsArray || function(obj) {
+    	return toString.call(obj) === '[object Array]';
+  	};
+  	// 这里的对象包括 function 和 object
+  	_.isObject = function(obj) {
+    	var type = typeof obj;
+    	return type === 'function' || type === 'object' && !!obj;
+  	};
+    // Add some isType methods: isArguments, isFunction, isString, isNumber, isDate, isRegExp, isError.
+   // 其他类型判断
+ 	_.each(['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp', 'Error'], function(name) {
+    	_['is' + name] = function(obj) {
+    		//_.isArguments = function(obj){ return toString.call(obj) === '[object Arguments]' }
+      		return toString.call(obj) === '[object ' + name + ']';
+    	};
+  	});
+    // _.isArguments 方法在 IE < 9 下的兼容
+	// IE < 9 下对 arguments 调用 Object.prototype.toString.call 方法
+	// 结果是 => [object Object]
+	// 而并非我们期望的 [object Arguments]。
+	// so 用是否含有 callee 属性来做兼容
+	 if (!_.isArguments(arguments)) {
+	    _.isArguments = function(obj) {
+	      	return _.has(obj, 'callee');
+	    };
+	}
 
 
     // _.isFunction 在 old v8, IE 11 和 Safari 8 下的兼容
