@@ -850,6 +850,8 @@
         => 15
     */
     _.partial = function(func){
+        //获得除func之外的参数
+        // 如果传入的是 _，则这个位置的参数暂时空着，等待手动填入
         var boundArgs = slice.call(arguments, 1);
         var bound = function(){
             var position = 0,
@@ -857,7 +859,51 @@
             var args = Array(length);
             for(var i = 0; i < length; i++){
                 args[i] = boundArgs[i] === _ ? arguments[position++] : boundArgs[i];
-            } 
+            }
+            while(position < arguments.length)
+                args.push(arguments[position++]);
+            return executeBound(func, bound, this, this, args); 
+        }
+        return bound;
+    }
+    /*
+        var buttonView = {
+            label  : 'underscore',
+            onClick: function(){ alert('clicked: ' + this.label); },
+            onHover: function(){ console.log('hovering: ' + this.label); }
+        };
+        _.bindAll(buttonView, 'onClick', 'onHover');
+        如果不这样绑定，在绑定事件的时候
+        a.onclick = buttonView.onClick; 
+        this指向的是元素a
+    */
+    _.bindAll = function(obj){
+        var  i, 
+            length = arguments.length, 
+            key;
+        //如果只传入了一个参数（obj），没有传入 methodNames，则报错
+        if(length <= 1)
+            throw new Error('bindAll must be passed function names');
+        /*
+            从1开始遍历，
+            ojb['onClick'] = _.bind(ojb['onClick'], obj)
+        */
+        for(i = 1; i < length; i++){
+            key = arguments[i];
+            obj[key] = _.bind(obj[key], obj);
+        }
+        return obj;
+    }
+    /*
+        var fibonacci = _.memoize(function(n) {
+            return n < 2 ? n: fibonacci(n - 1) + fibonacci(n - 2);
+        });
+    */
+    //「记忆化」，存储中间运算结果，提高效率
+    _.memoize = function(func, hasher){
+        var memoize = function(key){
+            var cache = memoize.cache;
+            var address = '';
         }
     }
     _.isBoolean = function(obj) {
@@ -887,7 +933,111 @@
         }
         return values;
     }
-
+    //对象的每个value进行迭代后，返回一个结果数组
+    _.mapObject = function(obj, iteratee, context){
+        iteratee = cb(iteratee, context);
+        var keys = _.keys(obj),
+            length = keys.length,
+            results = {},
+            currentKey;
+        for(var index = 0; index < length; index++){
+            currentKey = keys[index];
+            results[currentKey] = iteratee(obj[currentKey], currentKey, obj);
+        }
+        return results;
+    }
+    // 将一个对象转换为元素为 [key, value] 形式的数组
+    // _.pairs({one: 1, two: 2, three: 3});
+    // => [["one", 1], ["two", 2], ["three", 3]]
+    _.pairs = function(obj){
+        var keys = _.keys(obj);
+        var length = keys.length;
+        var pairs = Array(length);
+        for(var i = 0; i < length; i++){
+            pairs[i] = [keys[i], obj[keys[i]]];
+        }
+        return pairs;
+    }
+    // 将一个对象的 key-value 键值对颠倒
+    // 即原来的 key 为 value 值，原来的 value 值为 key 值
+    // 需要注意的是，value 值不能重复，否则会被覆盖
+    _.invert = function(obj){
+        var result = {};
+        var keys = _.keys(obj);
+        for(var i = 0, length = keys.length; i < length; i++){
+            result[obj[keys[i]]] = keys[i];
+        }
+        return result;
+    }
+    // 遍历该对象的键值对（包括 own properties 以及 原型链上的）
+    // 如果某个 value 的类型是方法（function），则将该 key 存入数组
+    _.functions = _.methods = function(obj){
+        var names = [];
+        for(var key in obj){
+            if(_.isFunction(obj[key])) names.push(key);
+        }
+        return names.sort();
+    }
+    // 将几个对象上（第二个参数开始，根据参数而定）的所有键值对添加到 destination 对象（第一个参数）上
+    // 因为 key 值可能会相同，所以后面的（键值对）可能会覆盖前面的
+    // 跟 extend 方法类似，但是只把 own properties 拷贝给第一个参数对象
+    _.extend = createAssigner(_.allKeys);
+    // 找到对象的键值对中第一个满足条件的键值对
+    _.findKey = function(obj, predicate, context){
+        predicate = cb(predicate, context);
+        var keys = _.keys(obj),
+            key;
+        for(var i = 0, length = keys.length; i < length; i++){
+            key = keys[i];
+            if(predicate(obj[key], key, obj)) return key;
+        }
+    }
+    /*
+        把对象中制定的key-value键值对筛选出来
+        _.pick({name: 'moe', age: 50, userid: 'moe1'}, 'name', 'age');
+        => {name: 'moe', age: 50}
+        _.pick({name: 'moe', age: 50, userid: 'moe1'}, ['name', 'age']);
+        => {name: 'moe', age: 50}
+        _.pick({name: 'moe', age: 50, userid: 'moe1'}, function(value, key, object) {
+            return _.isNumber(value);
+        });
+        => {age: 50}
+    */
+    _.pick = function(object, iteratee, context){
+        var result = {},
+            obj = object,
+            iteratee,
+            keys;
+        if(obj == null) return result;
+        if(_.isFunction(iteratee)){
+            //获得obj的所有key
+            keys = _.allKeys(obj);
+            iteratee = optimizeCb(iteratee, context);
+        } else {
+            // 如果第二个参数不是函数
+            // 则后面的 keys 可能是数组
+            // 也可能是连续的几个并列的参数
+            // 用 flatten 将它们展开
+            keys = flatten(arguments, false, false, 1);
+            iteratee = function(value, key, obj){
+                //只需要满足key在对象上即可
+                return key in obj;
+            }
+            obj = Object(obj);
+        }
+        for(var i = 0, length = keys.length; i < length; i++){
+            var key = keys[i];
+            var value = obj[key];
+            if(iteratee(value, key, obj)) result[key] = value;
+        }
+        return result;
+    }
+    _.omit = function(obj, iteratee, context){
+        if(_.isFunction(iteratee)){
+            iteratee
+        }
+    }
+    _.extendOwn = _.assign = createAssigner(_.keys);
     _.keys = function(obj){
         //如果传入参数不是对象，则返回空数组
         if(!_.isObject(obj)) return [];
@@ -901,6 +1051,16 @@
         // 传入 keys 数组为参数
         // 因为 JavaScript 下函数参数按值传递
         // 所以 keys 当做参数传入后会在 `collectNonEnumProps` 方法中改变值
+        if (hasEnumBug) collectNonEnumProps(obj, keys);
+        return keys;
+    }
+    _.allKeys = function(obj){
+        if(!_.isObject(obj)) return [];
+        // 不是对象，则返回空数组
+        var keys = [];
+        //for in会循环出原型链上属性，这里不过滤
+        for(var key in obj) keys.push(key);
+        // IE < 9 下的 bug，同 _.keys 方法
         if (hasEnumBug) collectNonEnumProps(obj, keys);
         return keys;
     }
