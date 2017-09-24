@@ -289,6 +289,12 @@
 	        return func == null ? func : func.apply(value, args);
 	    });
 	};
+    /*
+        var stooges = [{name: 'moe', age: 40}, {name: 'larry', age: 50}, {name: 'curly', age: 60}];
+        _.pluck(stooges, 'name');
+        => ["moe", "larry", "curly"]
+        萃取数组中所有对象的某属性值，返回一个数组。
+    */
 	// _.pluck(list, propertyName)
     //_.property返回一个函数，返回对象的指定value
 	_.pluck = function(obj, key) {
@@ -641,16 +647,218 @@
 		return result;
 	}
 
-
-    // 删除 array 数组中在 others 数组中出现的元素
+    /*
+        _.difference([1, 2, 3, 4, 5], [5, 2, 10]);
+        => [1, 3, 4]
+        删除 array 数组中在 others 数组中出现的元素
+    */
     _.difference = function(array){
     	// 将 others 数组展开一层
     	// rest[] 保存展开后的元素组成的数组
     	var rest = flatten(arguments, true, true, 1);
+        console.log(11, rest);
     	return _.filter(array, function(value){
-    		// 如果 value 存在在 rest 中，则过滤掉
+    		//如果 value 存在在 rest 中，则过滤掉
     		return !_.contains(rest, value);
     	})
+    }
+    /*
+        _.zip(['moe', 'larry', 'curly'], [30, 40, 50], [true, false, false]);
+        => [["moe", 30, true], ["larry", 40, false], ["curly", 50, false]]
+        将每个arrays中相应位置的值合并在一起。在合并分开保存的数据时很有用.
+    */
+    _.zip = function(){
+        return _.unzip(arguments);
+    }
+    /*
+        _.unzip([['moe', 'larry', 'curly'], [30, 40, 50], [true, false, false]])
+        => ["moe", 30, true], ["larry", 40, false], ["curly", 50, false]
+        与zip相反的功能
+    */
+    _.unzip = function(array){
+        //获得数组中元素数组的最大长度
+        var length = array && _.max(array, getLength).length || 0;
+        var result = Array(length);
+        for(var index = 0; index < length; index++){
+            //result[0] = _.pluck(array, 0);
+            //返回在所有的属性值，这里的属性为0
+            result[index] = _.pluck(array, index);
+        }
+        return result;
+    }
+    // 将数组转化为对象
+    /*
+        _.object(['moe', 'larry', 'curly'], [30, 40, 50]);
+        => {moe: 30, larry: 40, curly: 50}
+        第二种情况
+        _.object([['moe', 30], ['larry', 40], ['curly', 50]]);
+        => {moe: 30, larry: 40, curly: 50}
+    */
+    _.object = function(list, values){
+        var result = {};
+        for(var i = 0, length = getLength(list); i < length; i++){
+            if(values){
+                //list[i]为key, values[i]为value
+                result[list[i]] = values[i];
+            } else {
+                //第二种情况
+                result[list[i][0]] = list[i][1];
+            }
+        }
+        return result;
+    }
+    function createPredicateIndexFinder(dir){
+        return function(array, predicate, context){
+            predicate = cb(predicate, context);
+            var length = getLength(array);
+            //如果dir < 0，则从数组末尾开始遍历
+            var index = dir > 0 ? 0: length - 1;
+            //index已经在之前定义，第一个预定义条件直接放空
+            for(; index >= 0 && index < length; index += dir){
+                if(predicate(array[index], index, array))
+                    return index;
+            }
+            return -1;
+        }
+    }
+    // 从前往后找到数组中 `第一个满足条件` 的元素，并返回下标值
+    _.findIndex = createPredicateIndexFinder(1);
+    // 从后往前找到数组中 `第一个满足条件` 的元素，并返回下标值
+    _.findLastIndex = createPredicateIndexFinder(-1);
+    // 将一个元素插入已排序的数组
+    // 返回该插入的位置下标
+    /*
+        _.sortedIndex([10, 20, 30, 40, 50], 35);
+        => 3
+    */
+    _.sortedIndex = function(array, obj, iteratee, context){
+        iteratee = cb(iteratee, context, 1);
+        var value = iteratee(obj);
+        var low = 0, high = getLength(array);
+        while(low < high){
+            var mid = Math.floor((low + high) / 2);
+            //因为使用Math.floor，实际拿到的mid比中间数偏小
+            if(iteratee(array[mid]) < value){
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+        return low;
+    }
+    function createIndexFinder(dir, predicateFind, sortedIndex){
+        return function(array, item, idx){
+            var i = 0, 
+                length = getLength(array);
+            //如果idx为Number类型，则为查找的起始位置
+            // 那么第三个参数不是 [isSorted]
+            // 所以不能用二分查找优化了
+            // 只能遍历查找
+            if(typeof idx == 'number'){
+                // 正向查找
+                if(dir > 0){
+                    i = idx > 0 ? idx : Math.max(idx + length, i);
+                } else {
+                    // 如果是反向查找，重置 length 属性值
+                    length = idx >= 0 ? Math.min(idx + 1, length) : idx + length + 1;
+                }
+            } else if(sortedIndex && idx && length){
+                // 用 _.sortIndex 找到有序数组中 item 正好插入的位置
+                // 说明该位置就是 item 第一次出现的位置
+                // 返回下标
+                idx = sortedIndex(array, item);
+                return array[idx] === item ? idx : -1;
+            }
+            //如果要查找的元素是 NaN 类型
+            if(item !== item){
+                idx = predicateFind(slice.call(array, i, length), _.isNaN);
+                return idx >= 0 ? idx + i : -1;
+            }
+            //一个一个遍历
+            for(idx = dir > 0 ? i : length - 1; idx >= 0 && idx < length; idx += dir){
+                if(array[idx] === item) return idx;
+            }
+            return -1;
+        }
+    }
+    // 找到数组array中value 第一次出现的位置
+    // 并返回其下标值
+    // 如果数组有序，则第三个参数可以传入 true
+    _.indexOf = createIndexFinder(1, _.findIndex, _.sortedIndex);
+    //反序查找
+    _.lastIndexOf = createIndexFinder(-1, _.findLastIndex);
+    /*
+        _.range(10);
+        => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        _.range(1, 11);
+        => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        _.range(0, 30, 5);
+        => [0, 5, 10, 15, 20, 25]
+    */
+    _.range = function(start, stop, step){
+        if(stop == null){
+            //没有stop，转换成[0, stop]
+            stop = start || 0;
+            start = 0;
+        }
+        step = step || 1;
+        var length = Math.max(Math.ceil((stop - start) / step), 0);
+        var range = Array(length);
+        //多一个step变量来自增数组元素
+        for(var idx = 0; idx < length; idx++, start += step){
+            range[idx] = start;
+        }
+        return range;
+    }
+    /*
+        Function (ahem) Functions
+        函数的扩展方法
+        共 14 个扩展方法
+    */
+    var executeBound = function(sourceFunc, boundFunc, context, callingContext, args) {
+        if (!(callingContext instanceof boundFunc))
+            return sourceFunc.apply(context, args);
+        //sourceFunc是要调用bind的函数
+        // self 为 sourceFunc 的实例，继承了sourceFunc
+        // self 理论上是一个空对象（还没赋值）
+        var self = baseCreate(sourceFunc.prototype);
+        //还是调用原来的sourceFunc的this
+        var result = sourceFunc.apply(self, args);
+        if(_.isObject(result)) return result;
+        return self;
+    }
+    _.bind = function(func, context){
+        //如果存在ES5的bind并且func的bind方法没有被改掉
+        if(nativeBind && func.bind === nativeBind)
+            return nativeBind.apply(func, slice.call(arguments, 1));
+        // 如果传入的参数 func 不是方法，则抛出错误
+        if (!_.isFunction(func))
+            throw new TypeError('Bind must be called on a function');
+        //获得func和context之外的参数
+        var args = slice.call(arguments, 2);
+        var bound = function(){
+            //传入的参数和调用的参数进行合并
+            //bound是要返回的函数
+            return executeBound(func, bound, context, this, args.concat(slice.call(arguments)));
+        }
+        return bound;
+    }
+    /*
+        var subtract = function(a, b) { return b - a; };
+        sub5 = _.partial(subtract, 5);
+        sub5(20);
+        => 15
+    */
+    _.partial = function(func){
+        var boundArgs = slice.call(arguments, 1);
+        var bound = function(){
+            var position = 0,
+                length = boundArgs.length;
+            var args = Array(length);
+            for(var i = 0; i < length; i++){
+                args[i] = boundArgs[i] === _ ? arguments[position++] : boundArgs[i];
+            } 
+        }
     }
     _.isBoolean = function(obj) {
     	//使用短路运算来提升性能
