@@ -1032,10 +1032,94 @@
         }
         return result;
     }
+    // 跟 _.pick 方法相对
+  	// 返回 _.pick 的补集
     _.omit = function(obj, iteratee, context){
         if(_.isFunction(iteratee)){
-            iteratee
+        	// _.negate 方法对 iteratee 的结果取反
+            iteratee = _.negate(iteratee);
+        } else {
+        	var keys = _.map(flatten(arguments, false, false, 1), String);
+      		iteratee = function(value, key) {
+        		return !_.contains(keys, key);
+      		};
         }
+        return _.pick(obj, iteratee, context);
+    }
+    _.defaults = createAssigner(_.allKeys, true);
+    //返回给定原型的对象
+    _.create = function(prototype, props){
+    	var result = baseCreate(prototype);
+    	// 将 props 的键值对覆盖 result 对象
+    	if(props) _.extendOwn(result, props);
+    	return result;
+    }
+    /*
+    	如果是数组直接slice即可
+    	如果是对象为浅复制，所有嵌套的对象或者数组都会跟原对象同一个引用
+    */
+    _.clone = function(obj){
+    	if(!_.isObject(obj))
+    		return obj;
+    	return _.isArray(obj) ? obj.slice() : _.extend({}, obj);
+    }
+    /*
+    	用 object作为参数来调用函数interceptor，然后返回object。
+    	这种方法的主要意图是作为函数链式调用的一环, 为了对此对象执行操作并返回对象本身。
+    	_.chain([1,2,3,200])
+		  .filter(function(num) { return num % 2 == 0; })
+		  .tap(alert)
+		  .map(function(num) { return num * num })
+		  .value();
+		=> // [2, 200] (alerted)
+		=> [4, 40000]
+    */
+    _.tap = function(obj, interceptor){
+    	interceptor(obj);
+    	return obj;
+    }
+    /*
+    	判断 object 对象中是否有 attrs 中的所有 key-value 键值对
+    	var stooge = {name: 'moe', age: 32};
+		_.isMatch(stooge, {age: 32});
+		=> true
+    */
+    _.isMatch = function(object, attrs){
+    	var keys = _.keys(attrs),
+    		length = keys.length;
+    	if(object == null) return !length;
+    	var obj = Object(object);
+    	for(var i = 0; i < length; i++){
+    		var key = keys[i];
+    		if(attrs[key] !== obj[key] || !(key in obj)) return false;
+    	}
+    	return true;
+    }
+    var eq = function(a, b, aStack, bStack){
+    	if(a === b) return a !== 0 || 1 / a === 1 / b;
+    	//待实现
+    }
+    // [1, 2, 3], [1, 2, 3] 被认为 equal
+  	// 0 和 -0 被认为 unequal
+  	// NaN 和 NaN 被认为 equal
+  	_.isEqual = function(a, b) {
+    	return eq(a, b);
+  	};
+  	// 是否是 {}、[] 或者 "" 或者 null、undefined
+  	_.isEmpty = function(obj){
+  		if(obj == null) return true;
+  		if (isArrayLike(obj) && (_.isArray(obj) || _.isString(obj) || _.isArguments(obj))) return obj.length === 0;
+  		// 如果是对象
+    	// 根据 keys 数量判断是否为 Empty
+    	return _.keys(obj).length === 0;
+  	}
+  	_.isElement = function(obj){
+  		return !!(obj && obj.nodeType === 1);
+  	}
+    _.negate = function(predicate){
+    	return function(){
+    		return !predicate.apply(this, arguments);
+    	}
     }
     _.extendOwn = _.assign = createAssigner(_.keys);
     _.keys = function(obj){
