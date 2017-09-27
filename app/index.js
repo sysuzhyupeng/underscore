@@ -910,10 +910,46 @@
     	//使用短路运算来提升性能
     	return obj === true || obj === false || toString.call(obj) === '[object Boolean]';
   	};
+  	_.isNull = function(obj){
+  		return obj === null;
+  	}
+  	// undefined 能被改写 （IE < 9）
+    // undefined 只是全局对象的一个属性
+    // 在局部环境能被重新定义
+    // 但是「void 0」始终是 undefined
+  	_.isUndefined = function(obj){
+  		return obj === void 0;
+  	}
     _.has = function(obj, key) {
             // obj为null或者undefined返回false，否则判断是否在对象上
             return obj != null && hasOwnProperty.call(obj, key);
     };
+    // 如果全局环境中已经使用了 `_` 变量
+    // 可以用该方法返回其他变量
+    // 继续使用 underscore 中的方法
+    // var underscore = _.noConflict();
+    // underscore.each(..);
+    _.noConflict = function(){
+    	//之前已经root._ = previousUnderscore;
+    	root._ = previousUnderscore;
+    	return this;
+    }
+    //  _.identity 在 undescore 内大量作为迭代函数出现
+  	// 能简化很多迭代函数的书写
+    _.identity = function(value){
+    	return value;
+    }
+    _.constant = function(value){
+    	return function(){
+    		return value;
+    	}
+    }
+    _.noop = function(){};
+    _.propertyOf = function(obj){
+    	return obj == null ? function(){} : function(key){
+    		return obj[key];
+    	}
+    }
     _.random = function(min, max){
         //如果只传入一个参数，则返回[0, max]
         if(max == null){
@@ -1113,9 +1149,11 @@
     	// 根据 keys 数量判断是否为 Empty
     	return _.keys(obj).length === 0;
   	}
+  	// 判断是否为 DOM 元素
   	_.isElement = function(obj){
   		return !!(obj && obj.nodeType === 1);
   	}
+
     _.negate = function(predicate){
     	return function(){
     		return !predicate.apply(this, arguments);
@@ -1170,16 +1208,23 @@
 	// 结果是 => [object Object]
 	// 而并非我们期望的 [object Arguments]。
 	// so 用是否含有 callee 属性来做兼容
-	 if (!_.isArguments(arguments)) {
+	if (!_.isArguments(arguments)) {
 	    _.isArguments = function(obj) {
 	      	return _.has(obj, 'callee');
 	    };
 	}
+	// 判断是否是有限的数字
+	_.isFinite = function(obj){
+		return isFinite(obj) && !isNaN(parseFloat(obj));
+	}
+	_.isNaN = function(obj) {
+    	return _.isNumber(obj) && obj !== +obj;
+  	};
 
 
     // _.isFunction 在 old v8, IE 11 和 Safari 8 下的兼容
 	// 觉得这里有点问题
-	// 我用的 chrome 49 (显然不是 old v8)
+	// chrome 49 (显然不是 old v8)
 	// 却也进入了这个 if 判断内部
 	if (typeof /./ != 'function' && typeof Int8Array != 'object') {
 	    _.isFunction = function(obj) {
