@@ -945,10 +945,36 @@
     	}
     }
     _.noop = function(){};
+    /*
+    	var stooge = {name: 'moe'};
+		_.propertyOf(stooge)('name');
+		=> 'moe'
+    */
     _.propertyOf = function(obj){
+    	//重新调用时可以增加参数
     	return obj == null ? function(){} : function(key){
     		return obj[key];
     	}
+    }
+    /*
+    	返回一个断言函数，这个函数会给你一个断言可以用来辨别给定的对象是否匹配attrs指定键/值属性。
+    	var ready = _.matcher({selected: true, visible: true});
+    	var readyToGoList = _.filter(list, ready);
+    */
+    _.matcher = _.matches = function(attrs){
+    	//先进行拷贝
+    	attrs = _.extendOwn({}, attrs);
+    	return function(obj){
+    		return _.isMatch(obj, attrs);
+    	}
+    }
+    // 执行某函数 n 次, 返回每次执行的结果
+    _.times = function(n, iteratee, context){
+    	var accm = Array(Math(max, n));
+    	iteratee = optimizeCb(iteratee, context, 1);
+    	for(var i = 0; i < n; i++) 
+    		accm[i] = iteratee(i);
+    	return accm;
     }
     _.random = function(min, max){
         //如果只传入一个参数，则返回[0, max]
@@ -958,6 +984,37 @@
         }
         return min + Math.floor(Math.random() * (max - min + 1));
     }
+    // 能将 & " ' < > 转为实体编码（下面的前 5 种）
+    var escapeMap = {
+    	'&': '&amp;',
+	    '<': '&lt;',
+	    '>': '&gt;',
+	    '"': '&quot;',
+	    // 以上四个为最常用的字符实体
+	    // 也是仅有的可以在所有环境下使用的实体字符（其他应该用「实体数字」，如下）
+	    // 浏览器也许并不支持所有实体名称（对实体数字的支持却很好）
+	    "'": '&#x27;',
+	    '`': '&#x60;'
+    }
+    //翻转key和value值
+    var unescapeMap = _.invert(escapeMap);
+    var createEscaper = function(map){
+    	var escaper = function(match){
+    		return map[match];
+    	}
+    	//正则替换
+    	var source = '(?:' + _.keys(map).join('|') + ')';
+    	// 正则 pattern
+    	var testRegexp = RegExp(source);
+    	// 全局替换
+    	var replaceRegexp = RegExp(source, 'g');
+    	return function(string) {
+      		string = string == null ? '' : '' + string;
+      		return testRegexp.test(string) ? string.replace(replaceRegexp, escaper) : string;
+   		};
+    }
+    // 编码，防止被 XSS 攻击
+ 	_.escape = createEscaper(escapeMap);
     //把对象的value收集成数组后返回
     _.values = function(obj){
         // 仅包括 own properties
