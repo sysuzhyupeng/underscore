@@ -996,6 +996,38 @@
 	    "'": '&#x27;',
 	    '`': '&#x60;'
     }
+    // 这里的对象包括 function 和 object
+  	_.isObject = function(obj) {
+    	var type = typeof obj;
+    	return type === 'function' || type === 'object' && !!obj;
+  	};
+    _.keys = function(obj){
+        //如果传入参数不是对象，则返回空数组
+        if(!_.isObject(obj)) return [];
+        //如果支持Object.keys
+        if(nativeKeys) return nativeKeys(obj);
+        var keys = [];
+        for(var key in obj){
+            if(_.has(obj, key)) keys.push(key);
+        }
+        // IE < 9 下不能用 for in 来枚举某些 key 值
+        // 传入 keys 数组为参数
+        // 因为 JavaScript 下函数参数按值传递
+        // 所以 keys 当做参数传入后会在 `collectNonEnumProps` 方法中改变值
+        if (hasEnumBug) collectNonEnumProps(obj, keys);
+        return keys;
+    }
+    // 将一个对象的 key-value 键值对颠倒
+    // 即原来的 key 为 value 值，原来的 value 值为 key 值
+    // 需要注意的是，value 值不能重复，否则会被覆盖
+    _.invert = function(obj){
+        var result = {};
+        var keys = _.keys(obj);
+        for(var i = 0, length = keys.length; i < length; i++){
+            result[obj[keys[i]]] = keys[i];
+        }
+        return result;
+    }
     //翻转key和value值
     var unescapeMap = _.invert(escapeMap);
     var createEscaper = function(map){
@@ -1015,6 +1047,38 @@
     }
     // 编码，防止被 XSS 攻击
  	_.escape = createEscaper(escapeMap);
+ 	_.unescape = createEscaper(unescapeMap);
+ 	/*
+ 		var object = {cheese: 'crumpets', stuff: function(){ return 'nonsense'; }};
+		_.result(object, 'cheese');
+		=> "crumpets"
+		_.result(object, 'stuff');
+		=> "nonsense"
+		_.result(object, 'meat', 'ham');
+		=> "ham"
+ 	*/
+ 	_.result = function(object, proptety, fallback){
+ 		var value = object == null ? void 0 : object[property];
+ 		if(value === void 0){
+ 			value = fallback;
+ 		}
+ 		return _.isFunction(value) ? value.call(object): value;
+ 	}
+ 	var idCounter = 0;
+ 	_.uniqueId = function(index){
+ 		//id计数自增之后转成字符串
+ 		var id = ++idCounter + '';
+ 		return prefix ? prefix + id: id;
+ 	}
+ 	// Underscore 默认采用 ERB-style 风格模板，也可以根据自己习惯自定义模板
+    // 1. <%  %> - to execute some code
+    // 2. <%= %> - to print some value in template
+    // 3. <%- %> - to print some values HTML escaped
+    _.templateSettings = {
+    	evaluate: /<%([\s\S]+?)%>/g,
+    	interpolate : /<%=([\s\S]+?)%>/g,
+    	escape      : /<%-([\s\S]+?)%>/g
+    }
     //把对象的value收集成数组后返回
     _.values = function(obj){
         // 仅包括 own properties
@@ -1050,17 +1114,6 @@
             pairs[i] = [keys[i], obj[keys[i]]];
         }
         return pairs;
-    }
-    // 将一个对象的 key-value 键值对颠倒
-    // 即原来的 key 为 value 值，原来的 value 值为 key 值
-    // 需要注意的是，value 值不能重复，否则会被覆盖
-    _.invert = function(obj){
-        var result = {};
-        var keys = _.keys(obj);
-        for(var i = 0, length = keys.length; i < length; i++){
-            result[obj[keys[i]]] = keys[i];
-        }
-        return result;
     }
     // 遍历该对象的键值对（包括 own properties 以及 原型链上的）
     // 如果某个 value 的类型是方法（function），则将该 key 存入数组
@@ -1217,22 +1270,6 @@
     	}
     }
     _.extendOwn = _.assign = createAssigner(_.keys);
-    _.keys = function(obj){
-        //如果传入参数不是对象，则返回空数组
-        if(!_.isObject(obj)) return [];
-        //如果支持Object.keys
-        if(nativeKeys) return nativeKeys(obj);
-        var keys = [];
-        for(var key in obj){
-            if(_.has(obj, key)) keys.push(key);
-        }
-        // IE < 9 下不能用 for in 来枚举某些 key 值
-        // 传入 keys 数组为参数
-        // 因为 JavaScript 下函数参数按值传递
-        // 所以 keys 当做参数传入后会在 `collectNonEnumProps` 方法中改变值
-        if (hasEnumBug) collectNonEnumProps(obj, keys);
-        return keys;
-    }
     _.allKeys = function(obj){
         if(!_.isObject(obj)) return [];
         // 不是对象，则返回空数组
@@ -1246,11 +1283,6 @@
     // 判断是否为数组
   	_.isArray = nativeIsArray || function(obj) {
     	return toString.call(obj) === '[object Array]';
-  	};
-  	// 这里的对象包括 function 和 object
-  	_.isObject = function(obj) {
-    	var type = typeof obj;
-    	return type === 'function' || type === 'object' && !!obj;
   	};
     // Add some isType methods: isArguments, isFunction, isString, isNumber, isDate, isRegExp, isError.
    // 其他类型判断
