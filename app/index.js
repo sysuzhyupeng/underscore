@@ -1127,6 +1127,7 @@
         => "<b>&lt;script&gt;</b>"
 
         也可以在JavaScript代码中使用 print. 有时候这会比使用 <%= ... %> 更方便.
+        因为在编译可执行函数的时候，前面增加了print函数的定义
         var compiled = _.template("<% print('Hello ' + epithet); %>");
         compiled({epithet: "stooge"});
         => "Hello stooge"
@@ -1222,15 +1223,21 @@
             //function('obj', '_', source);
             var render = new Function(settings.variable || 'obj', '_', source);
         } catch(e){
-            // 抛出错误
+            // 添加错误信息后再抛出
             e.source = source;
             throw e;
         }
         // 返回的函数
         // data 一般是 JSON 数据，用来渲染模板
         var template = function(data){
+            try{
+                var result =  render.call(this, data, _);
+            } catch(e){
+                e.source = source;
+                throw e;
+            }
             // call可以传入多个参数，传入参数 _ ，使得模板里 <%  %> 里的代码能用 underscore 的方法
-            return render.call(this, data, _);
+            return result;
         }
         //obj 与 with(obj||{}) 中的 obj 对应
         var argument = settings.variable || 'obj';
