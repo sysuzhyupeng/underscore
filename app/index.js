@@ -1079,6 +1079,147 @@
     	interpolate : /<%=([\s\S]+?)%>/g,
     	escape      : /<%-([\s\S]+?)%>/g
     }
+    var noMatch = /(.)^/;
+    var escape = {
+      "'": "'",
+      '\\':     '\\',
+      '\r':     'r',  // 回车符
+      '\n':     'n',  // 换行符
+      // http://stackoverflow.com/questions/16686687/json-stringify-and-u2028-u2029-check
+      '\u2028': 'u2028', // Line separator
+      '\u2029': 'u2029' 
+    }
+    //是否包含escape中的key
+    var escaper = /\\|'|\r|\n|\u2028|\u2029/g;
+    var escapeChar = function(match) {
+        /**
+          '      => \\'
+          \\     => \\\\
+          \r     => \\r
+          \n     => \\n
+          \u2028 => \\u2028
+          \u2029 => \\u2029
+        **/
+        return '\\' + escapes[match];
+    };
+    /*
+        如果您希望插入一个值, 并让其进行HTML转义,请使用<%- … %>。 
+        当你要给模板函数赋值的时候，可以传递一个含有与模板对应属性的data对象 。 
+        如果您要写一个一次性的, 您可以传对象 data 作为第二个参数给模板 template 来直接呈现, 这样页面会立即呈现而不是返回一个模板函数. 参数 settings 是一个哈希表包含任何可以覆盖的设置
+        
+        var compiled = _.template("hello: <%= name %>");
+        compiled({name: 'moe'});
+        => "hello: moe"
+
+        进行转义
+        var template = _.template("<b><%- value %></b>");
+        template({value: '<script>'});
+        => "<b>&lt;script&gt;</b>"
+
+        也可以在JavaScript代码中使用 print. 有时候这会比使用 <%= ... %> 更方便.
+        var compiled = _.template("<% print('Hello ' + epithet); %>");
+        compiled({epithet: "stooge"});
+        => "Hello stooge"
+
+        如果ERB式的分隔符您不喜欢, 您可以改变Underscore的模板设置, 使用别的符号来嵌入代码.
+        定义一个 interpolate 正则表达式来逐字匹配嵌入代码的语句
+        _.templateSettings = {
+            interpolate: /\{\{(.+?)\}\}/g
+        };
+        把<%等标识修改为你喜欢的字符，修改默认配置
+
+        默认的, template 通过 with 语句来取得 data 所有的值. 当然, 您也可以在 variable 设置里指定一个变量名. 这样能显著提升模板的渲染速度.
+        _.template("Using 'with': <%= data.answer %>", {variable: 'data'})({answer: 'no'});
+        => "Using 'with': no"
+    */
+    // 将 JavaScript 模板编译为可以用于页面呈现的函数
+    // 第一次调用的时候可以传入settings
+    _.template = function(text, settings, oldSettings){
+        //settings为false， 并且传入了oldSettings参数
+        if(!settings && oldSettings)
+            settings = oldSettings;
+        // 可以查看_.defaults方法注释
+        // 自定义模板优先于默认模板 _.templateSettings
+        // 修改模板配置
+        settings = _.defaults({}, settings, _.templateSettings);
+        // 正则表达式 pattern，用于正则匹配 text 字符串中的模板字符串
+        /*
+            new RegExp('ab+c') 提供了正则表达式运行时编译（runtime compilation）。
+            如果你知道正则表达式模式将会改变，或者你事先不知道什么模式，
+            而是从另一个来源获取，如用户输入，这些情况都可以使用构造函数。
+
+            new RegExp('\n').source === '\n';  // true, prior to ES5
+            new RegExp('\n').source === '\\n'; // true, starting with ES5
+        */
+        var matcher = RegExp([
+          // 注意下 pattern 的 source 属性
+          (settings.escape || noMatch).source,
+          (settings.interpolate || noMatch).source,
+          (settings.evaluate || noMatch).source
+          // 默认matcher = <%-([\s\S]+?)%>|<%=([\s\S]+?)%>|<%([\s\S]+?)%>|$/g
+        ].join('|') + '|$', 'g');
+        var index = 0;
+        var source = "__p+='";
+        /*
+            replace 回调的offset参数
+            是指匹配到的子字符串在原字符串中的偏移量。（比如，如果原字符串是“abcd”，匹配到的子字符串是“bc”，那么这个参数将是1
+        */
+        text.replace(matcher, function(match, escape, interpolate, evaluate, offset){
+            source += text.slice(index, offset).replace(escaper, escapeChar);
+            index = offset + match.length;
+            if (escape) {
+                // 需要对变量进行编码（=> HTML 实体编码）
+                // 避免 XSS 攻击
+                source += "'+\n((__t=(" + escape + "))==null?'':_.escape(__t))+\n'";
+            } else if (interpolate) {
+                // 单纯的插入变量
+                source += "'+\n((__t=(" + interpolate + "))==null?'':__t)+\n'";
+            } else if (evaluate) {
+                // 可以直接执行的 JavaScript 语句
+                // 注意 "__p+="，__p 为渲染返回的字符串
+                source += "';\n" + evaluate + "\n__p+='";
+            }
+            // Adobe VMs need the match returned to produce the correct offset.
+            // return 的作用是？
+            // 将匹配到的内容原样返回（Adobe VMs 需要返回 match 来使得 offset 值正常）
+            return match;
+        })
+        source += "';\n";
+        // 如果设置了 settings.variable，能显著提升模板的渲染速度
+        // 否则，默认用 with 语句指定作用域
+        if (!settings.variable)
+            source = 'with(obj||{}){\n' + source + '}\n';
+        // 增加 print 功能
+        // __p 为返回的字符串
+        //print('xxxx')之后会直接调用join方法、
+        //__的命名来保证不会冲突
+        source = "var __t,__p='',__j=Array.prototype.join," +
+          "print=function(){__p+=__j.call(arguments,'');};\n" +
+          source + 'return __p;\n';
+        try {
+            // render 方法，前两个参数为 render 方法的参数
+            // obj 为传入的 JSON 对象，传入 _ 参数使得函数内部能用 Underscore 的函数
+            //function('obj', '_', source);
+            var render = new Function(settings.variable || 'obj', '_', source);
+        } catch(e){
+            // 抛出错误
+            e.source = source;
+            throw e;
+        }
+        // 返回的函数
+        // data 一般是 JSON 数据，用来渲染模板
+        var template = function(data){
+            // call可以传入多个参数，传入参数 _ ，使得模板里 <%  %> 里的代码能用 underscore 的方法
+            return render.call(this, data, _);
+        }
+        //obj 与 with(obj||{}) 中的 obj 对应
+        var argument = settings.variable || 'obj';
+        // 可通过 _.template(tpl).source 获取
+        // 可以用来预编译，在服务端预编译好，直接在客户端生成代码，客户端直接调用方法
+        // 这样如果出错就能打印出错行
+        template.source = 'function(' + argument + '){\n' + source + '}';
+        return template;
+    }
     //把对象的value收集成数组后返回
     _.values = function(obj){
         // 仅包括 own properties
@@ -1192,6 +1333,12 @@
         }
         return _.pick(obj, iteratee, context);
     }
+    /*
+        用defaults对象填充object 中的undefined属性。 并且返回这个object。一旦这个属性被填充，再使用defaults方法将不会有任何效果。
+        var iceCream = {flavor: "chocolate"};
+        _.defaults(iceCream, {flavor: "vanilla", sprinkles: "lots"});
+        => {flavor: "chocolate", sprinkles: "lots"}
+    */
     _.defaults = createAssigner(_.allKeys, true);
     //返回给定原型的对象
     _.create = function(prototype, props){
@@ -1296,7 +1443,7 @@
 	// IE < 9 下对 arguments 调用 Object.prototype.toString.call 方法
 	// 结果是 => [object Object]
 	// 而并非我们期望的 [object Arguments]。
-	// so 用是否含有 callee 属性来做兼容
+	// 所以用是否含有 callee 属性来做兼容
 	if (!_.isArguments(arguments)) {
 	    _.isArguments = function(obj) {
 	      	return _.has(obj, 'callee');
