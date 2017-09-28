@@ -22,7 +22,7 @@
     */
     var _ = function(obj){
     	//如果_()传入的是underscore对象，则不再初始化
-    	if(obj instanceof obj){
+    	if(obj instanceof _){
     		return obj;
     	}
     	if (!(this instanceof _)) return new _(obj);
@@ -1058,6 +1058,15 @@
     // 编码，防止被 XSS 攻击
  	_.escape = createEscaper(escapeMap);
  	_.unescape = createEscaper(unescapeMap);
+    // _.isFunction 在 old v8, IE 11 和 Safari 8 下的兼容
+    // 觉得这里有点问题
+    // chrome 49 (显然不是 old v8)
+    // 却也进入了这个 if 判断内部
+    if (typeof /./ != 'function' && typeof Int8Array != 'object') {
+        _.isFunction = function(obj) {
+            return typeof obj == 'function' || false;
+        };
+    }
  	/*
  		var object = {cheese: 'crumpets', stuff: function(){ return 'nonsense'; }};
 		_.result(object, 'cheese');
@@ -1158,7 +1167,6 @@
             new RegExp('ab+c') 提供了正则表达式运行时编译（runtime compilation）。
             如果你知道正则表达式模式将会改变，或者你事先不知道什么模式，
             而是从另一个来源获取，如用户输入，这些情况都可以使用构造函数。
-
             new RegExp('\n').source === '\n';  // true, prior to ES5
             new RegExp('\n').source === '\\n'; // true, starting with ES5
         */
@@ -1179,7 +1187,7 @@
             是指匹配到的子字符串在原字符串中的偏移量。（比如，如果原字符串是“abcd”，
             匹配到的子字符串是“bc”，那么这个参数将是1
 
-            字符串末尾会再执行一次
+            匹配到字符串末尾会再执行一次
         */
         text.replace(matcher, function(match, escape, interpolate, evaluate, offset){
             //匹配之前的字符串
@@ -1247,6 +1255,98 @@
         template.source = 'function(' + argument + '){\n' + source + '}';
         return template;
     }
+    /*
+        对一个对象使用 chain 方法, 
+        会把这个对象封装并 让以后每次方法的调用结束后都返回这个封装的对象,
+        当您完成了计算, 可以使用 value 函数来取得最终的值
+        返回一个封装的对象. 在封装的对象上调用方法会返回封装的对象本身, 
+        直到 value 方法调用为止.
+
+        var stooges = [{name: 'curly', age: 25}, {name: 'moe', age: 21}, {name: 'larry', age: 23}];
+        var youngest = _.chain(stooges)
+          .sortBy(function(stooge){ return stooge.age; })
+          .map(function(stooge){ return stooge.name + ' is ' + stooge.age; })
+          .first()
+          .value();
+        => "moe is 21"
+    */
+    _.chain = function(obj){
+        // 无论是否 OOP 调用，都会转为 OOP 形式
+        // 并且给新的构造对象添加了一个 _chain 属性
+        var instance = _(obj);
+        instance._chain = true;
+        // 返回 OOP 对象
+        // 可以看到该 instance 对象除了多了个 _chain 属性
+        // 其他的和直接 _(obj) 的结果一样
+        return instance;
+    }
+    //用在其他支持链式调用的方法中，判断是否当前是链式调用状态
+    var result = function(instance, obj){
+        return instance._chain ? _(obj).chain() : obj;
+        // 如果需要链式操作，则对传入的obj 运行 _.chain 方法，使得可以继续后续的链式操作
+        // 如果不需要，直接返回 obj
+    }
+    // 遍历该对象的键值对（包括 own properties 以及 原型链上的）
+    // 如果某个 value 的类型是方法（function），则将该 key 存入数组
+    /*
+        _.functions(_);
+        => ["all", "any", "bind", "bindAll", "clone", "compact", "compose" ...
+    */
+    _.functions = _.methods = function(obj){
+        var names = [];
+        for(var key in obj){
+            if(_.isFunction(obj[key])) names.push(key);
+        }
+        return names.sort();
+    }
+    // 可向 underscore 函数库扩展自己的方法
+    // obj 参数必须是一个对象 且自己的方法定义在 obj 的属性上
+    // 之后便可使用如下: _.myFunc(..) 或者 OOP _(..).myFunc(..)
+    _.mixin = function(obj){
+        //遍历obj上的方法
+        _.each(_.functions(obj), function(name){
+            // 直接把方法挂载到 _[name] 上, 浅拷贝
+            // 连等赋值是从右到左的
+            var func = _[name] = obj[name];
+            //将 name 方法挂载到 _ 对象的原型链上，使之能 OOP 调用
+            _.prototype[name] = function(){
+                var args = [this._wrapped];
+                push.apply(args, arguments);
+                return result(this, func.apply(_, args));
+            }
+        })
+    }
+    // 即添加到 _.prototype 中
+    // 使 underscore 支持面向对象形式的调用
+    _.mixin(_);
+    // 将 Array 原型链上有的方法都添加到 underscore 中
+    _.each(['pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'], function(name) {
+        var method = ArrayProto[name];
+        _.prototype[name] = function() {
+            //从this._wrapped获得调用对象的引用
+            var obj = this._wrapped;
+            method.apply(obj, arguments);
+
+            if ((name === 'shift' || name === 'splice') && obj.length === 0)
+            delete obj[0];
+
+            // 支持链式操作
+            return result(this, obj);
+        };
+    });
+    // 添加 concat、join、slice 等数组原生方法给 Underscore
+    _.each(['concat', 'join', 'slice'], function(name) {
+        var method = ArrayProto[name];
+        _.prototype[name] = function() {
+            return result(this, method.apply(this._wrapped, arguments));
+        };
+    });
+    _.prototype.value = function() {
+        return this._wrapped;
+    };
+    _.prototype.toString = function() {
+        return '' + this._wrapped;
+    };
     //把对象的value收集成数组后返回
     _.values = function(obj){
         // 仅包括 own properties
@@ -1282,15 +1382,6 @@
             pairs[i] = [keys[i], obj[keys[i]]];
         }
         return pairs;
-    }
-    // 遍历该对象的键值对（包括 own properties 以及 原型链上的）
-    // 如果某个 value 的类型是方法（function），则将该 key 存入数组
-    _.functions = _.methods = function(obj){
-        var names = [];
-        for(var key in obj){
-            if(_.isFunction(obj[key])) names.push(key);
-        }
-        return names.sort();
     }
     // 将几个对象上（第二个参数开始，根据参数而定）的所有键值对添加到 destination 对象（第一个参数）上
     // 因为 key 值可能会相同，所以后面的（键值对）可能会覆盖前面的
@@ -1478,15 +1569,10 @@
 	_.isNaN = function(obj) {
     	return _.isNumber(obj) && obj !== +obj;
   	};
-
-
-    // _.isFunction 在 old v8, IE 11 和 Safari 8 下的兼容
-	// 觉得这里有点问题
-	// chrome 49 (显然不是 old v8)
-	// 却也进入了这个 if 判断内部
-	if (typeof /./ != 'function' && typeof Int8Array != 'object') {
-	    _.isFunction = function(obj) {
-	        return typeof obj == 'function' || false;
-	    };
-	}
+    // 兼容 AMD 规范
+    if (typeof define === 'function' && define.amd) {
+        define('underscore', [], function() {
+            return _;
+        });
+    }
 }.call(window))
