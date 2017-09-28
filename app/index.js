@@ -1028,6 +1028,16 @@
         }
         return result;
     }
+    _.allKeys = function(obj){
+        if(!_.isObject(obj)) return [];
+        // 不是对象，则返回空数组
+        var keys = [];
+        //for in会循环出原型链上属性，这里不过滤
+        for(var key in obj) keys.push(key);
+        // IE < 9 下的 bug，同 _.keys 方法
+        if (hasEnumBug) collectNonEnumProps(obj, keys);
+        return keys;
+    }
     //翻转key和value值
     var unescapeMap = _.invert(escapeMap);
     var createEscaper = function(map){
@@ -1157,17 +1167,27 @@
           (settings.interpolate || noMatch).source,
           (settings.evaluate || noMatch).source
           // 默认matcher = <%-([\s\S]+?)%>|<%=([\s\S]+?)%>|<%([\s\S]+?)%>|$/g
+          // |指明两项之间的一个选择。要匹配 |，请使用 \|。
+          // \s匹配任何空白字符, \S匹配任何非空白字符
+          // |$ 匹配输入字符串的结尾位置，所以结尾肯定会调用一次
         ].join('|') + '|$', 'g');
         var index = 0;
         var source = "__p+='";
         /*
             replace 回调的offset参数
-            是指匹配到的子字符串在原字符串中的偏移量。（比如，如果原字符串是“abcd”，匹配到的子字符串是“bc”，那么这个参数将是1
+            是指匹配到的子字符串在原字符串中的偏移量。（比如，如果原字符串是“abcd”，
+            匹配到的子字符串是“bc”，那么这个参数将是1
+
+            字符串末尾会再执行一次
         */
         text.replace(matcher, function(match, escape, interpolate, evaluate, offset){
-            source += text.slice(index, offset).replace(escaper, escapeChar);
+            //匹配之前的字符串
+            var former = text.slice(index, offset);
+            // source用来保存字符串模板转化成的可执行函数
+            source += former.replace(escaper, escapeChar);
+            // index记录当前替换的位置
             index = offset + match.length;
-            if (escape) {
+            if (escape) {   
                 // 需要对变量进行编码（=> HTML 实体编码）
                 // 避免 XSS 攻击
                 source += "'+\n((__t=(" + escape + "))==null?'':_.escape(__t))+\n'";
@@ -1179,18 +1199,18 @@
                 // 注意 "__p+="，__p 为渲染返回的字符串
                 source += "';\n" + evaluate + "\n__p+='";
             }
-            // Adobe VMs need the match returned to produce the correct offset.
-            // return 的作用是？
+            // return 的作用是
             // 将匹配到的内容原样返回（Adobe VMs 需要返回 match 来使得 offset 值正常）
             return match;
         })
         source += "';\n";
         // 如果设置了 settings.variable，能显著提升模板的渲染速度
         // 否则，默认用 with 语句指定作用域
+        //使用with关键字的目的是为了简化多次编写访问同一对象的工作
         if (!settings.variable)
             source = 'with(obj||{}){\n' + source + '}\n';
         // 增加 print 功能
-        // __p 为返回的字符串
+        // __p 为返回的字符串（每次进行叠加）
         //print('xxxx')之后会直接调用join方法、
         //__的命名来保证不会冲突
         source = "var __t,__p='',__j=Array.prototype.join," +
@@ -1417,20 +1437,15 @@
     	}
     }
     _.extendOwn = _.assign = createAssigner(_.keys);
-    _.allKeys = function(obj){
-        if(!_.isObject(obj)) return [];
-        // 不是对象，则返回空数组
-        var keys = [];
-        //for in会循环出原型链上属性，这里不过滤
-        for(var key in obj) keys.push(key);
-        // IE < 9 下的 bug，同 _.keys 方法
-        if (hasEnumBug) collectNonEnumProps(obj, keys);
-        return keys;
-    }
     // 判断是否为数组
   	_.isArray = nativeIsArray || function(obj) {
     	return toString.call(obj) === '[object Array]';
   	};
+    // 比如重写了对象的 `toString` 方法，这个 key 值就不能在 IE < 9 下用 for in 枚举到
+    // IE < 9，{toString: null}.propertyIsEnumerable('toString') 返回 false
+    // IE < 9，重写的 `toString` 属性被认为不可枚举
+    // 据此可以判断是否在 IE < 9 浏览器环境中
+    var hasEnumBug = !{toString: null}.propertyIsEnumerable('toString');
     // Add some isType methods: isArguments, isFunction, isString, isNumber, isDate, isRegExp, isError.
    // 其他类型判断
  	_.each(['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp', 'Error'], function(name) {
