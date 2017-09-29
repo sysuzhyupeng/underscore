@@ -850,7 +850,7 @@
         => 15
     */
     _.partial = function(func){
-        //获得除func之外的参数
+        //_.partial(_.delay, _, 1); 获得除func之外的参数
         // 如果传入的是 _，则这个位置的参数暂时空着，等待手动填入
         var boundArgs = slice.call(arguments, 1);
         var bound = function(){
@@ -903,9 +903,188 @@
     _.memoize = function(func, hasher){
         var memoize = function(key){
             var cache = memoize.cache;
-            var address = '';
+            // 求 key
+            // 如果传入了 hasher，则用 hasher 函数来计算 key
+            // 否则用 参数 key（即 memoize 方法传入的第一个参数）当 key
+            //上面的例子的话key就是n
+            var address = '' + (hasher ? hasher.apply(this, arguments) : key);
+            // _.has对象是否包含给定的键吗
+             if (!_.has(cache, address))
+                //执行函数，直接使用调用时的参数key
+                cache[address] = func.apply(this, arguments);
+            //返回
+            return cache[address];
+        }
+        /*
+            cache 对象被当做 key-value 键值对缓存中间运算结果,
+            函数通过闭包获得cache对象的引用
+        */
+        memoize.cache = {};
+        return memoize;
+    }
+    // _.delay(function, wait, *arguments)
+    //  如果传入了 arguments 参数，则会被当作 func 的参数在触发时调用
+    // 其实是封装了「延迟触发某方法」，使其复用
+    /*
+        var log = _.bind(console.log, console);
+        _.delay(log, 1000, 'logged later');
+        => 'logged later' // Appears after one second.
+    */
+    _.delay = function(func, wait){
+        //args为除了func和wait之外的参数
+        var args = slice.call(arguments, 2);
+        return setTimeout(function(){
+            return func.apply(null, args);
+        }, wait);
+    }
+    /*
+        延迟调用function直到当前调用栈清空为止，类似使用延时为0的setTimeout方法。
+        对于执行开销大的计算和无阻塞UI线程的HTML渲染时候非常有用。
+        _.defer(function(){ alert('deferred'); });
+/       Returns from the function before the alert runs.
+    */
+    _.defer = _.partial(_.delay, _, 1);
+    /*
+        创建并返回一个像节流阀一样的函数，当重复调用函数的时候，至少每隔 wait毫秒调用一次该函数。
+        对于想控制一些触发频率较高的事件有帮助。
+        var throttled = _.throttle(updatePosition, 100);
+        $(window).scroll(throttled);
+    */
+    _.throttle = function(func, wait, options){
+        var context, args, result;
+        var timeout = null;
+        //上一次执行回调的时间戳
+        var previous = 0;
+        if(!options) options = {};
+        var later = function(){
+            // 如果 options.leading === false
+            // 则每次触发回调后将 previous 置为 0
+            // 否则置为当前时间戳
+            previous = options.leading === false ? 0 : _.now();
+            // previous = _.now();
+            timeout = null;
+            result = func.apply(context, args);
+            context = args = null;
+        }
+        return function(){
+            var now = _.now();
+            // 第一次执行回调（此时 previous 为 0，之后 previous 值为上一次时间戳）
+            // 并且如果程序设定第一个回调不是立即执行的（options.leading === false）
+            if(!previous && options.leading === false) previous = now;
+            // 距离下次触发 func 还需要等待的时间
+            var remaining = wait - (now - previous);
+            context = this;
+            args = arguments;
+            // 要么是到了间隔时间了，随即触发方法（remaining <= 0）
+            // 要么是没有传入 {leading: false}，且第一次触发回调，即立即触发
+            if(remaining <= 0 || remaining > wait){
+                if(timeout){
+                    clearTimeout(timeout);
+                    //解除引用，防止内存泄漏
+                    timeout = null;
+                }
+                //执行回调之后，更新previous
+                previous = now;
+                result = func.apply(context, args);
+                context = args = null;
+            } else if(!timeout && options.trailing !== false){
+                timeout = setTimeout(later, remaining);
+            }
+            //没有执行的话，返回上次的执行结果
+            return result;
         }
     }
+    /*
+        将延迟函数的执行(真正的执行)在函数最后一次调用时刻的 wait 毫秒之后. 
+        对于必须在一些输入（多是一些用户操作）停止到达之后执行的行为有帮助。 
+        例如: 渲染一个Markdown格式的评论预览, 当窗口停止改变大小之后重新计算布局
+        
+        并且在 wait 的时间之内，不会再次调用
+        在类似不小心点了提交按钮两下而提交了两次的情况下很有用
+
+        var lazyLayout = _.debounce(calculateLayout, 300);
+        $(window).resize(lazyLayout);
+
+         _.debounce(function(){}, 1000, true)
+    */
+    _.debounce = function(func, wait, immediate){
+        var timeout,
+            args,
+            context,
+            timestamp,
+            result;
+        var later = function(){
+            var last = _.now() - timestamp;
+            if(last < wait && wait >= 0){
+                //如果还没到时间，则递归调用
+                timeout = setTimeout(later, wait - last);
+            } else {
+                timeout = null;
+                //如果不是立即触发
+                if(!immediate){
+                    result = func.apply(context, args);
+                    if(!timeout) context = args = null;
+                }
+            }
+        }
+        return function(){
+            context = this;
+            args = arguments;
+            timestamp = _.now();
+            //immediate参数为true是立即触发
+            var callNow = immediate && !timeout;
+            if(!timeout)
+                // 设置了 timeout，所以以后不会进入这个 if 分支了
+                timeout = setTimeout(later, wait);
+            // 如果是立即触发 
+            if(callNow){
+                result = func.apply(context, args);
+                context = args = null;
+            }
+            return result;
+        }
+    }
+    /*
+        只有在运行了 count 次之后才有效果. 在处理同组异步请求返回结果时, 
+        如果你要确保同组里所有异步请求完成之后才 执行这个函数, 这将非常有用
+
+        var renderNotes = _.after(notes.length, render);
+        _.each(notes, function(note) {
+            //每次调用只更新了times，没有调用render
+            note.asyncSave({success: renderNotes});
+        });
+    */
+    _.after = function(times, func){
+        //times由外部传入
+        return function(){
+            //每次调用的时候times都-1
+            if(--times < 1){
+                return func.apply(this, arguments);
+            }
+        }
+    }
+    /*
+        创建一个函数,调用不超过count 次。 
+        当count已经达到时，最后一个函数调用的结果将被记住并返回。
+
+        var monthlyMeeting = _.before(3, askForRaise);
+        monthlyMeeting();
+        monthlyMeeting();
+        monthlyMeeting();
+        第三次调用结果和第二次调用的结果相同
+    */
+    _.before = function(times, func){
+        var memo;
+        return function(){
+            if(--times > 0){
+                //保存调用结果
+                memo = func.apply(this, arguments);
+            }
+        }
+        if(times <= 1) func = null;
+        return memo;
+    }
+    _.once = _.partial(_.before, 2);
     _.isBoolean = function(obj) {
     	//使用短路运算来提升性能
     	return obj === true || obj === false || toString.call(obj) === '[object Boolean]';
@@ -1544,8 +1723,35 @@
     // IE < 9，重写的 `toString` 属性被认为不可枚举
     // 据此可以判断是否在 IE < 9 浏览器环境中
     var hasEnumBug = !{toString: null}.propertyIsEnumerable('toString');
+    // IE < 9 下不能用 for in 来枚举的 key 值集合
+    // 其实还有个 `constructor` 属性
+    // nonEnumerableProps[] 中都是方法
+    // 而 constructor 表示的是对象的构造函数
+    // 所以区分开来了
+    var nonEnumerableProps = ['valueOf', 'isPrototypeOf', 'toString',
+                      'propertyIsEnumerable', 'hasOwnProperty', 'toLocaleString'];
+    // obj 为需要遍历键值对的对象
+    // keys 为键数组
+    // 利用 JavaScript 按值传递的特点
+    // 传入数组作为参数，能直接改变数组的值
+    function collectNonEnumProps(obj, keys){
+        var nonEnumIdx = nonEnumerableProps.length;
+        var constructor = obj.constructor;
+        var proto = (_.isFunction(constructor) && constructor.prototype) || ObjProto;
+        var prop = 'constructor';
+        if (_.has(obj, prop) && !_.contains(keys, prop)) keys.push(prop);
+        // 遍历 nonEnumerableProps 数组中的 keys
+        while (nonEnumIdx--) {
+            prop = nonEnumerableProps[nonEnumIdx];
+            // obj[prop] !== proto[prop] 判断该 key 是否来自于原型链
+            // 即是否重写了原型链上的属性
+            if (prop in obj && obj[prop] !== proto[prop] && !_.contains(keys, prop)) {
+                keys.push(prop);
+            }
+        }
+    }
     // Add some isType methods: isArguments, isFunction, isString, isNumber, isDate, isRegExp, isError.
-   // 其他类型判断
+    // 其他类型判断
  	_.each(['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp', 'Error'], function(name) {
     	_['is' + name] = function(obj) {
     		//_.isArguments = function(obj){ return toString.call(obj) === '[object Arguments]' }
